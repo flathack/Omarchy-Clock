@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+exec "$data_home/omarchy-clock/venv/bin/python" -u "$plugin_dir/calendar_backend.py"
