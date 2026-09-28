@@ -1100,13 +1100,18 @@ Panel {
                 font.letterSpacing: 1
               }
 
-              CalendarButton {
+              PanelActionButton {
                 id: accountToggle
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                label: root.managingAccounts ? "Zu Terminen" : "Konten"
+                iconText: "󰒓"
+                tooltipText: root.managingAccounts ? "Zu Terminen" : "Konten verwalten"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
+                fontSize: Style.font.iconLarge
+                size: Style.space(32)
+                focusable: true
+                bordered: root.managingAccounts
                 onClicked: {
                   root.managingAccounts = !root.managingAccounts
                   root.accountFormOpen = false
@@ -1114,14 +1119,19 @@ Panel {
                 }
               }
 
-              CalendarButton {
+              PanelActionButton {
                 anchors.right: accountToggle.left
                 anchors.rightMargin: Style.space(7)
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !root.managingAccounts && root.calendarAccounts.length > 0
-                label: "Aktualisieren"
+                iconText: "󰓦"
+                tooltipText: root.loadingEvents ? "Termine werden aktualisiert" : "Termine aktualisieren"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
+                fontSize: Style.font.iconLarge
+                size: Style.space(32)
+                focusable: true
+                enabled: !root.loadingEvents
                 onClicked: root.loadEvents()
               }
             }
@@ -1335,20 +1345,26 @@ Panel {
                   id: selectedDateLabel
                   anchors.left: parent.left
                   anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - newEventButton.width - Style.space(8)
                   textFormat: Text.PlainText
                   text: Qt.formatDate(new Date(root.selectedDayKey + "T12:00:00"), "dddd, d. MMMM yyyy")
                   color: root.contentForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.body
                   font.bold: true
+                  elide: Text.ElideRight
                 }
-                CalendarButton {
+                PanelActionButton {
                   id: newEventButton
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
-                  label: "Neuer Termin"
+                  iconText: "󰐕"
+                  tooltipText: "Neuer Termin"
                   foreground: root.contentForeground
                   fontFamily: root.contentFontFamily
+                  fontSize: Style.font.display
+                  size: Style.space(32)
+                  focusable: true
                   enabled: root.calendarAccounts.length > 0
                   onClicked: root.startNewEvent()
                 }
