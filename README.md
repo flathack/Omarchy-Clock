@@ -1,23 +1,27 @@
-# Omarchy Clock mit IONOS-Kalender
+# Omarchy Clock mit Nextcloud-Kalender
 
 Lokaler Fork des Omarchy-Widgets `omarchy.clock`. In der Leiste heißt er
-`steven.clock`. Die Kalenderansicht zeigt Termine aus IONOS Mail Business
+`steven.clock`. Die Kalenderansicht zeigt Termine aus Nextcloud
 über CalDAV und erlaubt Erstellen, Bearbeiten und Löschen.
 
 ## Verbindung einrichten
 
-1. In IONOS Webmail **Kalender** öffnen. Beim gewünschten Kalender über die
-   drei Punkte **Eigenschaften** öffnen und die CalDAV-Adresse kopieren.
+1. In Nextcloud **Kalender** öffnen und die persönliche CalDAV-Adresse des
+   gewünschten Kalenders kopieren. Unter **Persönliche Einstellungen → Sicherheit**
+   ein eigenes App-Passwort für dieses Widget erstellen.
 2. Auf die Uhr in der Omarchy-Leiste klicken, **Konten** und dann
    **Kalender hinzufügen** wählen.
-3. Namen, vollständige IONOS-E-Mail-Adresse, CalDAV-Adresse und Passwort
-   eingeben. Bei aktivierter Zwei-Schritt-Anmeldung ein IONOS-App-Passwort
-   verwenden.
+3. Namen, Nextcloud-Benutzernamen, CalDAV-Adresse und App-Passwort eingeben.
+   Das App-Passwort gehört nur in das Widget, nicht in ein Terminal oder den Chat.
+
+Beim Wechsel in ein anderes Fenster schließt sich das Popup. Die Formularfelder
+bleiben erhalten; ein erneuter Klick auf die Uhr öffnet sie wieder. **Abbrechen**
+verwirft das App-Passwort.
 
 Für weitere Kalender denselben Ablauf wiederholen. Jedes Konto verwaltet eine
 CalDAV-Kalenderadresse. Die Oberfläche prüft die Verbindung vor dem Speichern.
 
-[IONOS-Anleitung zur CalDAV-Adresse](https://www.ionos.com/help/email/managing-mail-business/syncing-mail-business-calendar-with-mac-os-x/)
+[Nextcloud-Dokumentation zu App-Passwörtern](https://docs.nextcloud.com/server/stable/user_manual/en/session_management.html)
 
 ## Lokale Installation
 
@@ -26,7 +30,7 @@ CalDAV-Kalenderadresse. Die Oberfläche prüft die Verbindung vor dem Speichern.
 Plugin-Verzeichnis und aktiviert `steven.clock`. Die Quelldateien bleiben in
 diesem Projektordner.
 
-Kontoname, E-Mail-Adresse und Kalenderadresse liegen in
+Kontoname, Benutzername und Kalenderadresse liegen in
 `~/.local/share/omarchy-clock/accounts.json` mit Dateirechten `0600`.
 Passwörter liegen ausschließlich im lokalen Secret-Service-Schlüsselbund.
 Das Plugin überträgt Daten nur per HTTPS mit Zertifikatsprüfung.

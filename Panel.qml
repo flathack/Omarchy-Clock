@@ -125,12 +125,10 @@ Panel {
 
   function close() {
     setCenterHoverRevealSuppressed(false)
-    // Dismissing the panel mid-edit would otherwise leave the inputs up,
-    // waiting behind a closed popup for the next time it opens.
+    // Outside clicks close this popup, including clicks made to copy a
+    // CalDAV URL or app password from another window. Keep form drafts until
+    // the user explicitly cancels, saves, or switches away from the form.
     if (root.editingLife) root.cancelEditingLife()
-    accountPasswordField.text = ""
-    root.accountFormOpen = false
-    root.eventFormOpen = false
     root.confirmDeleteEvent = false
     root.controller.hide()
   }
@@ -280,7 +278,7 @@ Panel {
     root.accountFormOpen = true
     root.editingAccountId = ""
     accountNameField.text = ""
-    accountEmailField.text = ""
+    accountUsernameField.text = ""
     accountUrlField.text = ""
     accountPasswordField.text = ""
   }
@@ -290,7 +288,7 @@ Panel {
     root.accountFormOpen = true
     root.editingAccountId = account.id
     accountNameField.text = account.name
-    accountEmailField.text = account.username
+    accountUsernameField.text = account.username
     accountUrlField.text = account.url
     accountPasswordField.text = ""
   }
@@ -300,7 +298,7 @@ Panel {
     sendBackend("save_account", {
       accountId: root.editingAccountId,
       name: accountNameField.text,
-      username: accountEmailField.text,
+      username: accountUsernameField.text,
       url: accountUrlField.text,
       password: accountPasswordField.text
     })
@@ -1118,7 +1116,7 @@ Panel {
                 width: parent.width
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
-                text: "Für jeden IONOS-Mail-Business-Kalender die CalDAV-Adresse aus Webmail → Kalender → Eigenschaften eintragen."
+                text: "Für jeden Nextcloud-Kalender die persönliche CalDAV-Adresse aus der Kalender-App eintragen."
                 color: Qt.darker(root.contentForeground, 1.4)
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -1235,11 +1233,10 @@ Panel {
                   foreground: root.contentForeground
                 }
                 TextField {
-                  id: accountEmailField
+                  id: accountUsernameField
                   width: parent.width
-                  placeholderText: "Vollständige IONOS-E-Mail-Adresse"
+                  placeholderText: "Nextcloud-Benutzername"
                   foreground: root.contentForeground
-                  inputMethodHints: Qt.ImhEmailCharactersOnly
                 }
                 TextField {
                   id: accountUrlField
@@ -1251,7 +1248,7 @@ Panel {
                 TextField {
                   id: accountPasswordField
                   width: parent.width
-                  placeholderText: root.editingAccountId ? "Neues Passwort (leer lassen: bisheriges behalten)" : "IONOS-Passwort oder App-Passwort"
+                  placeholderText: root.editingAccountId ? "Neues App-Passwort (leer: bisheriges behalten)" : "Nextcloud-App-Passwort"
                   foreground: root.contentForeground
                   password: true
                 }
@@ -1259,7 +1256,7 @@ Panel {
                   width: parent.width
                   textFormat: Text.PlainText
                   wrapMode: Text.Wrap
-                  text: "Das Passwort wird im lokalen Schlüsselbund gespeichert. Bei aktivierter Zwei-Schritt-Anmeldung ein IONOS-App-Passwort verwenden."
+                  text: "Das App-Passwort wird im lokalen Schlüsselbund gespeichert. Du kannst zum Kopieren das Fenster wechseln; nach erneutem Klick auf die Uhr bleiben deine Eingaben erhalten."
                   color: Qt.darker(root.contentForeground, 1.5)
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption
@@ -1318,7 +1315,7 @@ Panel {
                 width: parent.width
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
-                text: "Verbinde zuerst einen IONOS-Kalender über Konten."
+                text: "Verbinde zuerst einen Nextcloud-Kalender über Konten."
                 color: Qt.darker(root.contentForeground, 1.4)
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall

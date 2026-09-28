@@ -1,7 +1,7 @@
-"""Local JSON-lines bridge between the Omarchy widget and IONOS CalDAV.
+"""Local JSON-lines bridge between the Omarchy widget and CalDAV.
 
 Passwords only travel over stdin and are stored in the desktop Secret Service.
-The metadata file contains account names, email addresses and calendar URLs.
+The metadata file contains account names, usernames and calendar URLs.
 """
 
 from __future__ import annotations
@@ -314,7 +314,7 @@ def save_event(data: dict) -> dict:
             obj.save(no_create=True, only_this_recurrence=False)
         else:
             ics = ICalendar()
-            ics.add("prodid", "-//Omarchy Clock IONOS Calendar//DE")
+            ics.add("prodid", "-//Omarchy Clock CalDAV Calendar//DE")
             ics.add("version", "2.0")
             component = IEvent()
             component.add("uid", f"{uuid.uuid4()}@omarchy-clock.local")
@@ -345,9 +345,7 @@ def delete_event(data: dict) -> dict:
 
 def save_account(data: dict) -> dict:
     name = required_text(data, "name", "einen Kontonamen", 80)
-    username = required_text(data, "username", "die vollständige E-Mail-Adresse", 254)
-    if "@" not in username:
-        raise CalendarError("Bitte die vollständige IONOS-E-Mail-Adresse angeben.")
+    username = required_text(data, "username", "den Nextcloud-Benutzernamen", 254)
     url = calendar_url(required_text(data, "url", "die CalDAV-Adresse", 2048))
     current = accounts()
     account_id = str(data.get("accountId", "")) or str(uuid.uuid4())
@@ -356,7 +354,7 @@ def save_account(data: dict) -> dict:
         raise CalendarError("Das Kalenderkonto wurde nicht gefunden.")
     password = str(data.get("password", "")) or (secret("lookup", account_id) if existing else "")
     if not password:
-        raise CalendarError("Bitte ein Passwort oder IONOS-App-Passwort eingeben.")
+        raise CalendarError("Bitte das Nextcloud-App-Passwort eingeben.")
     item = {"id": account_id, "name": name, "username": username, "url": url}
     client, calendar = open_calendar(item, password)
     with client:
@@ -381,13 +379,13 @@ def public_error(exc: Exception) -> str:
         return str(exc)
     name = type(exc).__name__.lower()
     if "authorization" in name or "forbidden" in name:
-        return "IONOS hat die Anmeldung oder den Zugriff abgelehnt."
+        return "Nextcloud hat die Anmeldung oder den Zugriff abgelehnt."
     if "notfound" in name:
         return "Die CalDAV-Adresse wurde nicht gefunden."
     if "etag" in name or "precondition" in name:
         return "Der Termin wurde inzwischen geändert. Bitte neu laden."
     if "timeout" in name or "connection" in name:
-        return "IONOS ist gerade nicht erreichbar."
+        return "Nextcloud ist gerade nicht erreichbar."
     return "Die Kalenderanfrage ist fehlgeschlagen. Bitte Konto und CalDAV-Adresse prüfen."
 
 
