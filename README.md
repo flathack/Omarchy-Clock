@@ -1,8 +1,9 @@
-# Omarchy Clock mit Nextcloud-Kalender
+# Omarchy Clock mit Nextcloud-Kalender und Aufgaben
 
 Lokaler Fork des Omarchy-Widgets `omarchy.clock`. In der Leiste heißt er
 `steven.clock`. Die Kalenderansicht zeigt Termine aus Nextcloud
-über CalDAV und erlaubt Erstellen, Bearbeiten und Löschen.
+über CalDAV und erlaubt Erstellen, Bearbeiten und Löschen. Der Reiter
+**Aufgaben** zeigt die Nextcloud-Aufgabenlisten desselben Kontos.
 
 ## Verbindung einrichten
 
@@ -20,8 +21,24 @@ verwirft das App-Passwort.
 
 Für weitere Kalender denselben Ablauf wiederholen. Jedes Konto verwaltet eine
 CalDAV-Kalenderadresse. Die Oberfläche prüft die Verbindung vor dem Speichern.
+Aufgabenlisten werden danach automatisch aus dem Nextcloud-Konto gefunden;
+du brauchst für sie weder eine weitere Adresse noch ein weiteres Passwort.
 Über dem Monatsraster wechseln Mausrad und Zwei-Finger-Scrollen auf dem Touchpad
 zwischen den Monaten; die Pfeile unter dem Raster funktionieren ebenfalls.
+
+## Aufgaben
+
+Im Reiter **Aufgaben** erscheinen offene Aufgaben aus allen erreichbaren
+Nextcloud-Aufgabenlisten. **Erledigte anzeigen** blendet abgeschlossene Aufgaben
+ein. Das Kästchen neben einer Aufgabe schließt sie ab oder öffnet sie erneut;
+ein Klick auf den Text öffnet Titel, Beschreibung und Fälligkeit zur Bearbeitung.
+Über **+** wird eine Aufgabe angelegt. Die Aufgabenliste kann dabei gewählt
+werden; als Fälligkeit ist der im Kalender markierte Tag vorbelegt und kann
+geändert oder geleert werden. **Löschen** erfordert eine Bestätigung.
+
+Die Aufgaben werden beim Öffnen des Reiters und bei geöffnetem Popup alle fünf
+Minuten aktualisiert. Änderungen werden direkt nach Nextcloud geschrieben.
+Bei Serienaufgaben gelten Bearbeiten und Löschen für die ganze Serie.
 
 [Nextcloud-Dokumentation zu App-Passwörtern](https://docs.nextcloud.com/server/stable/user_manual/en/session_management.html)
 

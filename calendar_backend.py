@@ -19,6 +19,7 @@ from urllib.parse import unquote, urlsplit
 import caldav
 from icalendar import Calendar as ICalendar
 from icalendar import Event as IEvent
+from icalendar import Todo as ITodo
 
 
 APP = "omarchy-clock"
@@ -343,6 +344,197 @@ def delete_event(data: dict) -> dict:
     return {}
 
 
+def task_lists_for(client) -> list:
+    """Discover task-capable collections from the authenticated principal."""
+    return [calendar for calendar in client.get_principal().get_calendars()
+            if "VTODO" in calendar.get_supported_components()]
+
+
+def task_calendar(client, raw: str):
+    url = str(raw)
+    for calendar in task_lists_for(client):
+        if str(calendar.url).rstrip("/") == url.rstrip("/"):
+            return calendar
+    raise CalendarError("Die Aufgabenliste gehört nicht zu diesem Konto.")
+
+
+def task_component(obj):
+    instance = obj.icalendar_instance
+    if instance is None:
+        raise CalendarError("Diese Aufgabe enthält keine Kalendereinträge.")
+    components = [part for part in instance.subcomponents if part.name == "VTODO"]
+    for part in components:
+        if "RECURRENCE-ID" not in part:
+            return part
+    if components:
+        return components[0]
+    raise CalendarError("Dieser Kalendereintrag ist keine Aufgabe.")
+
+
+def normalized_task(obj, account: dict, calendar, *, list_name: str | None = None, detailed: bool = False) -> dict:
+    component = task_component(obj)
+    due = local_value(component.decoded("DUE")) if "DUE" in component else ""
+    result = {
+        "accountId": account["id"],
+        "listUrl": str(calendar.url),
+        "listName": list_name if list_name is not None else calendar.get_display_name(),
+        "resourceUrl": str(obj.url),
+        "etag": obj.etag or "",
+        "title": str(component.get("SUMMARY", "Ohne Titel")),
+        "due": due,
+        "dueAllDay": bool(due) and len(due) == 10,
+        "completed": str(component.get("STATUS", "")).upper() == "COMPLETED" or "COMPLETED" in component,
+        "recurring": "RRULE" in component or any("RECURRENCE-ID" in p for p in obj.icalendar_instance.subcomponents),
+    }
+    if detailed:
+        result["description"] = str(component.get("DESCRIPTION", ""))
+    return result
+
+
+def list_tasks(data: dict) -> dict:
+    found: list[dict] = []
+    lists: list[dict] = []
+    errors: list[dict] = []
+    seen: set[str] = set()
+    for account in accounts():
+        try:
+            client, _ = open_calendar(account)
+            with client:
+                for calendar in task_lists_for(client):
+                    url = str(calendar.url)
+                    if url in seen:
+                        continue
+                    name = calendar.get_display_name()
+                    lists.append({"accountId": account["id"], "url": url, "name": name})
+                    try:
+                        for obj in calendar.get_todos(include_completed=True):
+                            try:
+                                found.append(normalized_task(obj, account, calendar, list_name=name))
+                            except (ValueError, KeyError, AttributeError, CalendarError):
+                                continue
+                        seen.add(url)
+                    except Exception as exc:
+                        lists.pop()
+                        errors.append({"name": name, "message": public_error(exc)})
+        except Exception as exc:
+            errors.append({"name": account["name"], "message": public_error(exc)})
+    found.sort(key=lambda task: (task["completed"], not bool(task["due"]), task["due"], task["title"].lower()))
+    return {"lists": lists, "tasks": found, "errors": errors}
+
+
+def open_task(data: dict):
+    account = account_for(str(data.get("accountId", "")))
+    client, _ = open_calendar(account)
+    try:
+        calendar = task_calendar(client, str(data.get("listUrl", "")))
+        raw_url = str(data.get("resourceUrl", ""))
+        url = validate_resource_url({"url": str(calendar.url)}, raw_url)
+        obj = caldav.Todo(client=client, url=url).load()
+        task_component(obj)
+        return client, calendar, obj, account
+    except Exception:
+        client.close()
+        raise
+
+
+def load_task(data: dict) -> dict:
+    client, calendar, obj, account = open_task(data)
+    with client:
+        return normalized_task(obj, account, calendar, detailed=True)
+
+
+def parse_task_fields(data: dict) -> dict:
+    title = required_text(data, "title", "einen Aufgabentitel", 255)
+    description = str(data.get("description", "")).strip()
+    if len(description) > 8192:
+        raise CalendarError("Die Aufgabenbeschreibung ist zu lang.")
+    raw_due = str(data.get("due", "")).strip()
+    try:
+        due = (date.fromisoformat(raw_due) if len(raw_due) == 10 else datetime.fromisoformat(raw_due)) if raw_due else None
+        if isinstance(due, datetime) and due.tzinfo is None:
+            due = due.astimezone()
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise CalendarError("Das Fälligkeitsdatum ist ungültig.") from exc
+    return {"title": title, "description": description, "due": due}
+
+
+def apply_task_fields(component, fields: dict) -> None:
+    for key in ("SUMMARY", "DESCRIPTION", "DUE"):
+        component.pop(key, None)
+    component.add("summary", fields["title"])
+    if fields["description"]:
+        component.add("description", fields["description"])
+    if fields["due"] is not None:
+        component.add("due", fields["due"])
+    component.pop("LAST-MODIFIED", None)
+    component.add("last-modified", datetime.now(timezone.utc))
+
+
+def save_task(data: dict) -> dict:
+    fields = parse_task_fields(data)
+    if data.get("resourceUrl"):
+        client, calendar, obj, _ = open_task(data)
+        with client:
+            expected = str(data.get("etag", ""))
+            if expected and obj.etag != expected:
+                raise CalendarError("Die Aufgabe wurde inzwischen geändert. Bitte neu laden.")
+            component = task_component(obj)
+            apply_task_fields(component, fields)
+            obj.data = obj.icalendar_instance.to_ical()
+            obj.save(no_create=True, only_this_recurrence=False)
+    else:
+        account = account_for(str(data.get("accountId", "")))
+        client, _ = open_calendar(account)
+        with client:
+            calendar = task_calendar(client, str(data.get("listUrl", "")))
+            ics = ICalendar()
+            ics.add("prodid", "-//Omarchy Clock CalDAV Tasks//DE")
+            ics.add("version", "2.0")
+            component = ITodo()
+            component.add("uid", f"{uuid.uuid4()}@omarchy-clock.local")
+            component.add("dtstamp", datetime.now(timezone.utc))
+            component.add("status", "NEEDS-ACTION")
+            apply_task_fields(component, fields)
+            ics.add_component(component)
+            obj = calendar.add_todo(ics.to_ical().decode("utf-8"), no_overwrite=True)
+    return {"resourceUrl": str(obj.url)}
+
+
+def set_task_completed(data: dict) -> dict:
+    client, _, obj, _ = open_task(data)
+    with client:
+        expected = str(data.get("etag", ""))
+        if expected and obj.etag != expected:
+            raise CalendarError("Die Aufgabe wurde inzwischen geändert. Bitte neu laden.")
+        component = task_component(obj)
+        done = data.get("completed") is True
+        for key in ("STATUS", "PERCENT-COMPLETE", "COMPLETED", "LAST-MODIFIED"):
+            component.pop(key, None)
+        component.add("status", "COMPLETED" if done else "NEEDS-ACTION")
+        component.add("percent-complete", 100 if done else 0)
+        if done:
+            component.add("completed", datetime.now(timezone.utc))
+        component.add("last-modified", datetime.now(timezone.utc))
+        obj.data = obj.icalendar_instance.to_ical()
+        obj.save(no_create=True, only_this_recurrence=False)
+    return {}
+
+
+def delete_task(data: dict) -> dict:
+    client, _, obj, _ = open_task(data)
+    with client:
+        expected = str(data.get("etag", ""))
+        if expected and obj.etag != expected:
+            raise CalendarError("Die Aufgabe wurde inzwischen geändert. Bitte neu laden.")
+        headers = {"If-Match": obj.etag} if obj.etag else {}
+        response = client.request(str(obj.url), method="DELETE", headers=headers)
+        if response.status not in (200, 202, 204):
+            if response.status == 412:
+                raise CalendarError("Die Aufgabe wurde inzwischen geändert. Bitte neu laden.")
+            raise CalendarError(f"Die Aufgabe konnte nicht gelöscht werden (HTTP {response.status}).")
+    return {}
+
+
 def save_account(data: dict) -> dict:
     name = required_text(data, "name", "einen Kontonamen", 80)
     username = required_text(data, "username", "den Nextcloud-Benutzernamen", 254)
@@ -383,10 +575,10 @@ def public_error(exc: Exception) -> str:
     if "notfound" in name:
         return "Die CalDAV-Adresse wurde nicht gefunden."
     if "etag" in name or "precondition" in name:
-        return "Der Termin wurde inzwischen geändert. Bitte neu laden."
+        return "Der Eintrag wurde inzwischen geändert. Bitte neu laden."
     if "timeout" in name or "connection" in name:
         return "Nextcloud ist gerade nicht erreichbar."
-    return "Die Kalenderanfrage ist fehlgeschlagen. Bitte Konto und CalDAV-Adresse prüfen."
+    return "Die CalDAV-Anfrage ist fehlgeschlagen. Bitte Konto und Adresse prüfen."
 
 
 OPERATIONS = {
@@ -397,6 +589,11 @@ OPERATIONS = {
     "event": load_event,
     "save_event": save_event,
     "delete_event": delete_event,
+    "tasks": list_tasks,
+    "task": load_task,
+    "save_task": save_task,
+    "set_task_completed": set_task_completed,
+    "delete_task": delete_task,
 }
 
 

@@ -41,6 +41,18 @@ Panel {
   property var calendarAccounts: []
   property var calendarEvents: []
   property var calendarErrors: []
+  property var taskLists: []
+  property var calendarTasks: []
+  property var taskErrors: []
+  property bool showingTasks: false
+  property bool showCompletedTasks: false
+  property bool loadingTasks: false
+  property bool savingTask: false
+  property bool taskFormOpen: false
+  property bool confirmDeleteTask: false
+  property var editingTask: null
+  property string taskAccountId: ""
+  property string taskListUrl: ""
   property bool loadingEvents: false
   property bool savingAccount: false
   property bool savingEvent: false
@@ -58,6 +70,9 @@ Panel {
   property var backendQueue: []
   readonly property var selectedDayEvents: calendarEvents.filter(function(event) {
     return event.days && event.days.indexOf(root.selectedDayKey) !== -1
+  })
+  readonly property var visibleTasks: calendarTasks.filter(function(task) {
+    return root.showCompletedTasks || !task.completed
   })
   readonly property string backendPath: decodeURIComponent(String(Qt.resolvedUrl("calendar-backend")).replace(/^file:\/\//, ""))
 
@@ -126,6 +141,7 @@ Panel {
     // the user explicitly cancels, saves, or switches away from the form.
     if (root.editingLife) root.cancelEditingLife()
     root.confirmDeleteEvent = false
+    root.confirmDeleteTask = false
     root.controller.hide()
   }
 
@@ -208,6 +224,32 @@ Panel {
     sendBackend("events", { year: root.viewYear, month: root.viewMonth + 1 })
   }
 
+  function loadTasks() {
+    if (root.calendarAccounts.length === 0) {
+      root.taskLists = []
+      root.calendarTasks = []
+      root.taskErrors = []
+      root.loadingTasks = false
+      return
+    }
+    root.loadingTasks = true
+    sendBackend("tasks", {})
+  }
+
+  function showTaskView() {
+    root.managingAccounts = false
+    root.showingTasks = true
+    root.eventFormOpen = false
+    root.loadTasks()
+  }
+
+  function showEventView() {
+    root.managingAccounts = false
+    root.showingTasks = false
+    root.taskFormOpen = false
+    root.loadEvents()
+  }
+
   function handleBackendLine(line) {
     var reply
     try { reply = JSON.parse(line) }
@@ -215,8 +257,10 @@ Panel {
     if (!reply.ok) {
       root.calendarMessage = reply.error || "Kalenderanfrage fehlgeschlagen."
       root.loadingEvents = false
+      root.loadingTasks = false
       root.savingAccount = false
       root.savingEvent = false
+      root.savingTask = false
       return
     }
     var data = reply.data || {}
@@ -225,6 +269,7 @@ Panel {
     case "accounts":
       root.calendarAccounts = data.accounts || []
       eventRefreshTimer.restart()
+      if (root.showingTasks) root.loadTasks()
       break
     case "events":
       if (data.year !== root.viewYear || data.month !== root.viewMonth + 1) {
@@ -265,6 +310,35 @@ Panel {
       root.confirmDeleteEvent = false
       root.editingEvent = null
       eventRefreshTimer.restart()
+      break
+    case "tasks":
+      root.taskLists = data.lists || []
+      root.calendarTasks = data.tasks || []
+      root.taskErrors = data.errors || []
+      root.loadingTasks = false
+      break
+    case "task":
+      root.editingTask = data
+      root.taskAccountId = data.accountId
+      root.taskListUrl = data.listUrl
+      root.confirmDeleteTask = false
+      taskTitleField.text = data.title || ""
+      taskDescriptionField.text = data.description || ""
+      taskDueDateField.text = data.due ? data.due.slice(0, 10) : ""
+      taskDueTimeField.text = data.due && !data.dueAllDay ? data.due.slice(11, 16) : ""
+      root.taskFormOpen = true
+      break
+    case "save_task":
+    case "delete_task":
+      root.savingTask = false
+      root.taskFormOpen = false
+      root.confirmDeleteTask = false
+      root.editingTask = null
+      root.loadTasks()
+      break
+    case "set_task_completed":
+      root.savingTask = false
+      root.loadTasks()
       break
     }
   }
@@ -344,6 +418,67 @@ Panel {
       accountId: root.editingEvent.accountId,
       resourceUrl: root.editingEvent.resourceUrl,
       etag: root.editingEvent.etag
+    })
+  }
+
+  function startNewTask() {
+    if (root.calendarAccounts.length === 0) { root.managingAccounts = true; return }
+    root.showingTasks = true
+    root.editingTask = null
+    root.confirmDeleteTask = false
+    root.taskAccountId = root.taskLists.length ? root.taskLists[0].accountId : ""
+    root.taskListUrl = root.taskLists.length ? root.taskLists[0].url : ""
+    for (var i = 0; i < root.taskLists.length; i++) {
+      if (/task|aufgab/i.test(root.taskLists[i].name)) {
+        root.taskAccountId = root.taskLists[i].accountId
+        root.taskListUrl = root.taskLists[i].url
+        break
+      }
+    }
+    taskTitleField.text = ""
+    taskDescriptionField.text = ""
+    taskDueDateField.text = root.selectedDayKey
+    taskDueTimeField.text = ""
+    root.taskFormOpen = true
+  }
+
+  function editExistingTask(task) {
+    root.calendarMessage = ""
+    sendBackend("task", { accountId: task.accountId, listUrl: task.listUrl, resourceUrl: task.resourceUrl })
+  }
+
+  function saveCalendarTask() {
+    root.savingTask = true
+    sendBackend("save_task", {
+      accountId: root.taskAccountId,
+      listUrl: root.taskListUrl,
+      resourceUrl: root.editingTask ? root.editingTask.resourceUrl : "",
+      etag: root.editingTask ? root.editingTask.etag : "",
+      title: taskTitleField.text,
+      description: taskDescriptionField.text,
+      due: taskDueDateField.text ? taskDueDateField.text + (taskDueTimeField.text ? "T" + taskDueTimeField.text : "") : ""
+    })
+  }
+
+  function setTaskCompleted(task, completed) {
+    root.savingTask = true
+    sendBackend("set_task_completed", {
+      accountId: task.accountId,
+      listUrl: task.listUrl,
+      resourceUrl: task.resourceUrl,
+      etag: task.etag,
+      completed: completed
+    })
+  }
+
+  function deleteCalendarTask() {
+    if (!root.editingTask) return
+    root.savingTask = true
+    sendBackend("delete_task", {
+      accountId: root.editingTask.accountId,
+      listUrl: root.editingTask.listUrl,
+      resourceUrl: root.editingTask.resourceUrl,
+      etag: root.editingTask.etag
     })
   }
 
@@ -441,7 +576,10 @@ Panel {
     interval: 300000
     repeat: true
     running: root.opened && root.calendarAccounts.length > 0
-    onTriggered: root.loadEvents()
+    onTriggered: {
+      root.loadEvents()
+      if (root.showingTasks) root.loadTasks()
+    }
   }
 
   Process {
@@ -497,7 +635,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      blocked: root.editingLife || root.accountFormOpen || root.eventFormOpen
+      blocked: root.editingLife || root.accountFormOpen || root.eventFormOpen || root.taskFormOpen
       onMoveRequested: function(dx, dy) {
         if (dx !== 0) root.moveMonth(dx)
         if (dy !== 0) root.moveYear(dy)
@@ -1092,7 +1230,7 @@ Panel {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
-                text: root.managingAccounts ? "KONTEN & KALENDER" : "TERMINE"
+                text: root.managingAccounts ? "KONTEN & KALENDER" : (root.showingTasks ? "AUFGABEN" : "TERMINE")
                 color: root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -1105,7 +1243,7 @@ Panel {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 iconText: "󰒓"
-                tooltipText: root.managingAccounts ? "Zu Terminen" : "Konten verwalten"
+                tooltipText: root.managingAccounts ? "Zurück" : "Konten verwalten"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
                 fontSize: Style.font.iconLarge
@@ -1124,21 +1262,21 @@ Panel {
                 anchors.rightMargin: Style.space(7)
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !root.managingAccounts && root.calendarAccounts.length > 0
-                iconText: root.loadingEvents ? "" : "󰓦"
-                tooltipText: root.loadingEvents ? "Termine werden aktualisiert" : "Termine aktualisieren"
+                iconText: (root.showingTasks ? root.loadingTasks : root.loadingEvents) ? "" : "󰓦"
+                tooltipText: root.showingTasks ? "Aufgaben aktualisieren" : "Termine aktualisieren"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
                 fontSize: Style.font.iconLarge
                 size: Style.space(32)
                 focusable: true
-                enabled: !root.loadingEvents
-                onClicked: root.loadEvents()
+                enabled: !(root.showingTasks ? root.loadingTasks : root.loadingEvents)
+                onClicked: root.showingTasks ? root.loadTasks() : root.loadEvents()
 
                 Item {
                   width: Style.space(14)
                   height: width
                   anchors.centerIn: parent
-                  visible: root.loadingEvents
+                  visible: root.showingTasks ? root.loadingTasks : root.loadingEvents
 
                   Rectangle {
                     anchors.fill: parent
@@ -1165,10 +1303,29 @@ Panel {
                       to: 360
                       duration: 900
                       loops: Animation.Infinite
-                      running: root.loadingEvents && root.opened
+                      running: (root.showingTasks ? root.loadingTasks : root.loadingEvents) && root.opened
                     }
                   }
                 }
+              }
+            }
+
+            Row {
+              visible: !root.managingAccounts
+              spacing: Style.space(7)
+              CalendarButton {
+                label: "Termine"
+                selected: !root.showingTasks
+                foreground: root.contentForeground
+                fontFamily: root.contentFontFamily
+                onClicked: root.showEventView()
+              }
+              CalendarButton {
+                label: "Aufgaben"
+                selected: root.showingTasks
+                foreground: root.contentForeground
+                fontFamily: root.contentFontFamily
+                onClicked: root.showTaskView()
               }
             }
 
@@ -1184,7 +1341,7 @@ Panel {
             }
 
             Repeater {
-              model: root.calendarErrors
+              model: root.showingTasks && !root.managingAccounts ? root.taskErrors : root.calendarErrors
               Text {
                 required property var modelData
                 width: agendaArea.width
@@ -1370,7 +1527,7 @@ Panel {
             }
 
             Column {
-              visible: !root.managingAccounts
+              visible: !root.managingAccounts && !root.showingTasks
               width: parent.width
               spacing: Style.space(8)
 
@@ -1650,6 +1807,285 @@ Panel {
                     label: "Nein"
                     foreground: root.contentForeground
                     onClicked: root.confirmDeleteEvent = false
+                  }
+                }
+              }
+            }
+
+            Column {
+              visible: !root.managingAccounts && root.showingTasks
+              width: parent.width
+              spacing: Style.space(8)
+
+              Item {
+                width: parent.width
+                height: Math.max(taskSectionTitle.implicitHeight, newTaskButton.height)
+                Text {
+                  id: taskSectionTitle
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  width: parent.width - newTaskButton.width - Style.space(8)
+                  textFormat: Text.PlainText
+                  text: root.calendarTasks.filter(function(task) { return !task.completed }).length + " offene Aufgaben"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                }
+                PanelActionButton {
+                  id: newTaskButton
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  iconText: "󰐕"
+                  tooltipText: "Neue Aufgabe"
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  fontSize: Style.font.display
+                  size: Style.space(32)
+                  focusable: true
+                  enabled: root.taskLists.length > 0
+                  onClicked: root.startNewTask()
+                }
+              }
+
+              CalendarButton {
+                visible: !root.taskFormOpen
+                label: root.showCompletedTasks ? "Erledigte ausblenden" : "Erledigte anzeigen"
+                selected: root.showCompletedTasks
+                foreground: root.contentForeground
+                fontFamily: root.contentFontFamily
+                onClicked: root.showCompletedTasks = !root.showCompletedTasks
+              }
+
+              Text {
+                visible: root.calendarAccounts.length === 0
+                width: parent.width
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                text: "Verbinde zuerst dein Nextcloud-Konto über Konten."
+                color: Qt.darker(root.contentForeground, 1.4)
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+              Text {
+                visible: root.calendarAccounts.length > 0 && root.taskLists.length === 0 && !root.loadingTasks
+                width: parent.width
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+                text: "Keine Nextcloud-Aufgabenliste gefunden. Lege in Nextcloud Aufgaben eine Liste an und aktualisiere die Ansicht."
+                color: Qt.darker(root.contentForeground, 1.4)
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Column {
+                visible: !root.taskFormOpen
+                width: parent.width
+                spacing: Style.space(5)
+
+                Repeater {
+                  model: root.visibleTasks
+                  Rectangle {
+                    required property var modelData
+                    width: agendaArea.width
+                    height: Style.space(50)
+                    radius: Style.cornerRadius
+                    color: taskMouse.containsMouse
+                      ? Style.hoverFillFor(root.contentForeground, Color.accent)
+                      : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.055)
+
+                    MouseArea {
+                      id: taskMouse
+                      anchors.fill: parent
+                      hoverEnabled: true
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: root.editExistingTask(parent.modelData)
+                    }
+
+                    PanelActionButton {
+                      anchors.left: parent.left
+                      anchors.leftMargin: Style.space(5)
+                      anchors.verticalCenter: parent.verticalCenter
+                      iconText: parent.modelData.completed ? "󰄲" : "󰄱"
+                      tooltipText: parent.modelData.completed ? "Als offen markieren" : "Als erledigt markieren"
+                      foreground: root.contentForeground
+                      fontFamily: root.contentFontFamily
+                      fontSize: Style.font.iconLarge
+                      size: Style.space(32)
+                      focusable: true
+                      enabled: !root.savingTask
+                      onClicked: root.setTaskCompleted(parent.modelData, !parent.modelData.completed)
+                    }
+
+                    Column {
+                      anchors.left: parent.left
+                      anchors.leftMargin: Style.space(42)
+                      anchors.right: parent.right
+                      anchors.rightMargin: Style.space(8)
+                      anchors.verticalCenter: parent.verticalCenter
+                      Text {
+                        width: parent.width
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        text: modelData.title
+                        color: root.contentForeground
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.body
+                        font.strikeout: modelData.completed
+                      }
+                      Text {
+                        width: parent.width
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        text: modelData.listName + (modelData.due ? " · Fällig " + Qt.formatDate(new Date(modelData.due.slice(0, 10) + "T12:00:00"), "d. MMM") + (modelData.dueAllDay ? "" : " " + modelData.due.slice(11, 16)) : "")
+                        color: Qt.darker(root.contentForeground, 1.5)
+                        font.family: root.contentFontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                  }
+                }
+
+                Text {
+                  visible: root.taskLists.length > 0 && root.visibleTasks.length === 0 && !root.loadingTasks
+                  text: root.showCompletedTasks ? "Keine Aufgaben vorhanden." : "Keine offenen Aufgaben."
+                  color: Qt.darker(root.contentForeground, 1.5)
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+              }
+
+              Column {
+                visible: root.taskFormOpen
+                width: parent.width
+                spacing: Style.space(6)
+
+                Text {
+                  text: root.editingTask ? "AUFGABE BEARBEITEN" : "AUFGABE ERSTELLEN"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  font.bold: true
+                }
+                Text {
+                  visible: root.editingTask && root.editingTask.recurring
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  wrapMode: Text.Wrap
+                  text: "Serienaufgabe: Änderungen gelten für die ganze Serie."
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+                Flow {
+                  width: parent.width
+                  spacing: Style.space(6)
+                  Repeater {
+                    model: root.taskLists
+                    CalendarButton {
+                      required property var modelData
+                      label: modelData.name
+                      selected: root.taskListUrl === modelData.url
+                      enabled: !root.editingTask
+                      foreground: root.contentForeground
+                      fontFamily: root.contentFontFamily
+                      onClicked: {
+                        root.taskAccountId = modelData.accountId
+                        root.taskListUrl = modelData.url
+                      }
+                    }
+                  }
+                }
+                TextField {
+                  id: taskTitleField
+                  width: parent.width
+                  placeholderText: "Aufgabe"
+                  foreground: root.contentForeground
+                }
+                Row {
+                  spacing: Style.space(7)
+                  TextField {
+                    id: taskDueDateField
+                    width: Style.space(160)
+                    placeholderText: "Fällig: JJJJ-MM-TT"
+                    foreground: root.contentForeground
+                  }
+                  TextField {
+                    id: taskDueTimeField
+                    width: Style.space(90)
+                    placeholderText: "HH:MM"
+                    foreground: root.contentForeground
+                  }
+                }
+                Text {
+                  text: "Fälligkeit optional; Datum für keine Fälligkeit leeren."
+                  color: Qt.darker(root.contentForeground, 1.5)
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                }
+                Rectangle {
+                  width: parent.width
+                  height: Style.space(74)
+                  radius: Style.cornerRadius
+                  color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.055)
+                  border.width: Style.spacing.hairline
+                  border.color: Style.normalBorderFor(root.contentForeground, Color.accent)
+
+                  QQC.TextArea {
+                    id: taskDescriptionField
+                    anchors.fill: parent
+                    anchors.margins: Style.space(5)
+                    placeholderText: "Beschreibung (optional)"
+                    wrapMode: TextEdit.Wrap
+                    color: root.contentForeground
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.body
+                    background: null
+                  }
+                }
+                Row {
+                  spacing: Style.space(7)
+                  CalendarButton {
+                    label: root.savingTask ? "Speichere…" : "Speichern"
+                    primary: true
+                    enabled: !root.savingTask && root.taskListUrl !== ""
+                    foreground: root.contentForeground
+                    onClicked: root.saveCalendarTask()
+                  }
+                  CalendarButton {
+                    label: "Abbrechen"
+                    foreground: root.contentForeground
+                    onClicked: { root.taskFormOpen = false; root.confirmDeleteTask = false }
+                  }
+                  CalendarButton {
+                    visible: !!root.editingTask
+                    label: "Löschen"
+                    danger: true
+                    foreground: root.contentForeground
+                    onClicked: root.confirmDeleteTask = true
+                  }
+                }
+                Row {
+                  visible: root.confirmDeleteTask
+                  spacing: Style.space(7)
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.editingTask && root.editingTask.recurring ? "Ganze Serie löschen?" : "Aufgabe löschen?"
+                    color: root.contentForeground
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+                  CalendarButton {
+                    label: "Ja, löschen"
+                    danger: true
+                    enabled: !root.savingTask
+                    foreground: root.contentForeground
+                    onClicked: root.deleteCalendarTask()
+                  }
+                  CalendarButton {
+                    label: "Nein"
+                    foreground: root.contentForeground
+                    onClicked: root.confirmDeleteTask = false
                   }
                 }
               }
