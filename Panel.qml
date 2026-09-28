@@ -6,13 +6,9 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// The clock's calendar popup: a month grid with ISO week numbers, built to
-// sit beside the weather panel — same hero-over-detail composition, same
-// spacing scale, same small-caps labels.
-//
-// The grid is a read-out rather than a picker: today is the only marked
-// day, and the only thing that moves is which month is on screen —
-// chevrons, the scroll wheel, and the arrow keys all step it.
+// The clock's calendar popup: a month grid with ISO week numbers, a compact
+// today/selection overview, and the selected day's events.
+// Chevrons, the scroll wheel, and the arrow keys step through months.
 //
 // BarWidget.qml owns the bar label and hands this panel the button to
 // anchor against.
@@ -37,8 +33,7 @@ Panel {
   property date today: new Date()
   readonly property string todayKey: Model.keyForDate(today)
 
-  // The month on screen. Stepping moves this and nothing else: the grid is
-  // a read-out, not a picker, so there is no per-day cursor to keep in sync.
+  // The month on screen and the day selected in the grid.
   property int viewYear: today.getFullYear()
   property int viewMonth: today.getMonth()
   property real monthWheelAccumulator: 0
@@ -536,63 +531,105 @@ Panel {
           width: Math.max(calendarScroll.width, gridColumn.width)
           spacing: Style.space(8)
 
-          // ---- Hero: today, centered. Once the view has stepped back
-          //      it is also the way home — clicking the date you are
-          //      looking for beats hunting for a reset button.
+          // ---- Compact date overview. Today is also the way back after
+          //      selecting another day or browsing to another month.
           Item {
             width: parent.width
             height: heroRow.height
 
             Row {
               id: heroRow
+              width: parent.width - Style.space(36)
               anchors.horizontalCenter: parent.horizontalCenter
-              spacing: Style.space(22)
+              spacing: Style.space(14)
 
-              Text {
-                // Baseline-aligned, not center-aligned: "July 26" carries a
-                // descender, so centering the two boxes leaves the icon
-                // sitting visibly low against the digits.
-                anchors.baseline: heroDate.baseline
-                text: "󰃭"
-                color: heroMouse.containsMouse
-                  ? Style.hoverStateColor(root.contentForeground, Color.accent)
-                  : root.contentForeground
-                font.family: root.contentFontFamily
-                // Decorative, and deliberately outside the Style.font.*
-                // scale. Sized so the glyph reads at the cap height of the
-                // date beside it rather than towering over it.
-                font.pixelSize: 48
+              Item {
+                id: todayBlock
+                width: (heroRow.width - heroDivider.width - 2 * heroRow.spacing) / 2
+                height: todayColumn.implicitHeight
+
+                Column {
+                  id: todayColumn
+                  width: parent.width
+                  spacing: Style.space(4)
+
+                  Text {
+                    text: "HEUTE"
+                    color: Qt.darker(root.contentForeground, 1.5)
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                    font.letterSpacing: 1
+                  }
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: Qt.locale("de_DE").toString(root.today, "d. MMM yyyy")
+                    color: heroMouse.containsMouse
+                      ? Style.hoverStateColor(root.contentForeground, Color.accent)
+                      : root.contentForeground
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.display
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+                }
+
+                MouseArea {
+                  id: heroMouse
+                  anchors.fill: parent
+                  enabled: root.selectedDayKey !== root.todayKey
+                  hoverEnabled: enabled
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.goToToday()
+
+                  PanelToolTip {
+                    visible: heroMouse.containsMouse
+                    text: "Zurück zu heute"
+                    fontFamily: root.contentFontFamily
+                  }
+                }
               }
 
-              Text {
-                id: heroDate
-                textFormat: Text.PlainText
-                anchors.verticalCenter: parent.verticalCenter
-                text: Qt.formatDate(root.today, "MMMM d")
-                color: heroMouse.containsMouse
-                  ? Style.hoverStateColor(root.contentForeground, Color.accent)
-                  : root.contentForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: 52
-                font.bold: true
+              Rectangle {
+                id: heroDivider
+                width: Style.spacing.hairline
+                height: Math.max(todayBlock.height, selectedBlock.height)
+                color: root.contentForeground
+                opacity: 0.18
               }
-            }
 
-            MouseArea {
-              id: heroMouse
-              x: heroRow.x
-              y: heroRow.y
-              width: heroRow.width
-              height: heroRow.height
-              enabled: !root.viewingCurrentMonth
-              hoverEnabled: enabled
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.goToToday()
+              Item {
+                id: selectedBlock
+                width: todayBlock.width
+                height: selectedColumn.implicitHeight
 
-              PanelToolTip {
-                visible: heroMouse.containsMouse
-                text: "Back to today"
-                fontFamily: root.contentFontFamily
+                Column {
+                  id: selectedColumn
+                  width: parent.width
+                  spacing: Style.space(4)
+
+                  Text {
+                    text: "AUSGEWÄHLT"
+                    color: Qt.darker(root.contentForeground, 1.5)
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                    font.letterSpacing: 1
+                  }
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: Qt.locale("de_DE").toString(new Date(root.selectedDayKey + "T12:00:00"), "d. MMM yyyy")
+                    color: Style.selectedStateColor(root.contentForeground, Color.accent)
+                    font.family: root.contentFontFamily
+                    font.pixelSize: Style.font.display
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+                }
               }
             }
           }
