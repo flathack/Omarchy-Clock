@@ -429,7 +429,9 @@ def open_task(data: dict):
         calendar = task_calendar(client, str(data.get("listUrl", "")))
         raw_url = str(data.get("resourceUrl", ""))
         url = validate_resource_url({"url": str(calendar.url)}, raw_url)
-        obj = caldav.Todo(client=client, url=url).load()
+        # save(no_create=True) checks the UID through the parent calendar.
+        # Without it python-caldav rejects existing tasks as missing.
+        obj = caldav.Todo(client=client, url=url, parent=calendar).load()
         task_component(obj)
         return client, calendar, obj, account
     except Exception:

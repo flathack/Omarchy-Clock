@@ -30,7 +30,9 @@ zwischen den Monaten; die Pfeile unter dem Raster funktionieren ebenfalls.
 
 Im Reiter **Aufgaben** erscheinen offene Aufgaben aus allen erreichbaren
 Nextcloud-Aufgabenlisten. **Erledigte anzeigen** blendet abgeschlossene Aufgaben
-ein. Das Kästchen neben einer Aufgabe schließt sie ab oder öffnet sie erneut;
+ein. Die Liste zeigt höchstens fünf Aufgaben gleichzeitig und lässt sich bei
+weiteren Einträgen innerhalb des Reiters scrollen. Das Kästchen neben einer
+Aufgabe schließt sie ab oder öffnet sie erneut;
 ein Klick auf den Text öffnet Titel, Beschreibung und Fälligkeit zur Bearbeitung.
 Über **+** wird eine Aufgabe angelegt. Die Aufgabenliste kann dabei gewählt
 werden; als Fälligkeit ist der im Kalender markierte Tag vorbelegt und kann

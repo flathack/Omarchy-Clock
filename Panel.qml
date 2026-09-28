@@ -1878,81 +1878,97 @@ Panel {
                 font.pixelSize: Style.font.bodySmall
               }
 
-              Column {
-                visible: !root.taskFormOpen
+              Flickable {
+                id: taskScroll
+                visible: !root.taskFormOpen && root.visibleTasks.length > 0
                 width: parent.width
-                spacing: Style.space(5)
+                height: Math.min(taskRows.implicitHeight, Style.space(50) * 5 + Style.space(5) * 4)
+                contentWidth: width
+                contentHeight: taskRows.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+                interactive: contentHeight > height
+                QQC.ScrollBar.vertical: QQC.ScrollBar {
+                  policy: root.visibleTasks.length > 5 ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
+                }
 
-                Repeater {
-                  model: root.visibleTasks
-                  Rectangle {
-                    required property var modelData
-                    width: agendaArea.width
-                    height: Style.space(50)
-                    radius: Style.cornerRadius
-                    color: taskMouse.containsMouse
-                      ? Style.hoverFillFor(root.contentForeground, Color.accent)
-                      : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.055)
+                Column {
+                  id: taskRows
+                  width: taskScroll.width
+                  spacing: Style.space(5)
 
-                    MouseArea {
-                      id: taskMouse
-                      anchors.fill: parent
-                      hoverEnabled: true
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: root.editExistingTask(parent.modelData)
-                    }
+                  Repeater {
+                    model: root.visibleTasks
+                    Rectangle {
+                      required property var modelData
+                      width: taskRows.width
+                      height: Style.space(50)
+                      radius: Style.cornerRadius
+                      color: taskMouse.containsMouse
+                        ? Style.hoverFillFor(root.contentForeground, Color.accent)
+                        : Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.055)
 
-                    PanelActionButton {
-                      anchors.left: parent.left
-                      anchors.leftMargin: Style.space(5)
-                      anchors.verticalCenter: parent.verticalCenter
-                      iconText: parent.modelData.completed ? "󰄲" : "󰄱"
-                      tooltipText: parent.modelData.completed ? "Als offen markieren" : "Als erledigt markieren"
-                      foreground: root.contentForeground
-                      fontFamily: root.contentFontFamily
-                      fontSize: Style.font.iconLarge
-                      size: Style.space(32)
-                      focusable: true
-                      enabled: !root.savingTask
-                      onClicked: root.setTaskCompleted(parent.modelData, !parent.modelData.completed)
-                    }
-
-                    Column {
-                      anchors.left: parent.left
-                      anchors.leftMargin: Style.space(42)
-                      anchors.right: parent.right
-                      anchors.rightMargin: Style.space(8)
-                      anchors.verticalCenter: parent.verticalCenter
-                      Text {
-                        width: parent.width
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        text: modelData.title
-                        color: root.contentForeground
-                        font.family: root.contentFontFamily
-                        font.pixelSize: Style.font.body
-                        font.strikeout: modelData.completed
+                      MouseArea {
+                        id: taskMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.editExistingTask(parent.modelData)
                       }
-                      Text {
-                        width: parent.width
-                        textFormat: Text.PlainText
-                        elide: Text.ElideRight
-                        text: modelData.listName + (modelData.due ? " · Fällig " + Qt.formatDate(new Date(modelData.due.slice(0, 10) + "T12:00:00"), "d. MMM") + (modelData.dueAllDay ? "" : " " + modelData.due.slice(11, 16)) : "")
-                        color: Qt.darker(root.contentForeground, 1.5)
-                        font.family: root.contentFontFamily
-                        font.pixelSize: Style.font.caption
+
+                      PanelActionButton {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Style.space(5)
+                        anchors.verticalCenter: parent.verticalCenter
+                        iconText: parent.modelData.completed ? "󰄲" : "󰄱"
+                        tooltipText: parent.modelData.completed ? "Als offen markieren" : "Als erledigt markieren"
+                        foreground: root.contentForeground
+                        fontFamily: root.contentFontFamily
+                        fontSize: Style.font.iconLarge
+                        size: Style.space(32)
+                        focusable: true
+                        enabled: !root.savingTask
+                        onClicked: root.setTaskCompleted(parent.modelData, !parent.modelData.completed)
+                      }
+
+                      Column {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Style.space(42)
+                        anchors.right: parent.right
+                        anchors.rightMargin: Style.space(8)
+                        anchors.verticalCenter: parent.verticalCenter
+                        Text {
+                          width: parent.width
+                          textFormat: Text.PlainText
+                          elide: Text.ElideRight
+                          text: modelData.title
+                          color: root.contentForeground
+                          font.family: root.contentFontFamily
+                          font.pixelSize: Style.font.body
+                          font.strikeout: modelData.completed
+                        }
+                        Text {
+                          width: parent.width
+                          textFormat: Text.PlainText
+                          elide: Text.ElideRight
+                          text: modelData.listName + (modelData.due ? " · Fällig " + Qt.formatDate(new Date(modelData.due.slice(0, 10) + "T12:00:00"), "d. MMM") + (modelData.dueAllDay ? "" : " " + modelData.due.slice(11, 16)) : "")
+                          color: Qt.darker(root.contentForeground, 1.5)
+                          font.family: root.contentFontFamily
+                          font.pixelSize: Style.font.caption
+                        }
                       }
                     }
                   }
                 }
+              }
 
-                Text {
-                  visible: root.taskLists.length > 0 && root.visibleTasks.length === 0 && !root.loadingTasks
-                  text: root.showCompletedTasks ? "Keine Aufgaben vorhanden." : "Keine offenen Aufgaben."
-                  color: Qt.darker(root.contentForeground, 1.5)
-                  font.family: root.contentFontFamily
-                  font.pixelSize: Style.font.bodySmall
-                }
+              Text {
+                visible: !root.taskFormOpen && root.taskLists.length > 0 && root.visibleTasks.length === 0 && !root.loadingTasks
+                text: root.showCompletedTasks ? "Keine Aufgaben vorhanden." : "Keine offenen Aufgaben."
+                color: Qt.darker(root.contentForeground, 1.5)
+                font.family: root.contentFontFamily
+                font.pixelSize: Style.font.bodySmall
               }
 
               Column {
