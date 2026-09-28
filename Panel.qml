@@ -1878,31 +1878,25 @@ Panel {
                 font.pixelSize: Style.font.bodySmall
               }
 
-              Flickable {
-                id: taskScroll
+              ListView {
+                id: taskList
                 visible: !root.taskFormOpen && root.visibleTasks.length > 0
                 width: parent.width
-                height: Math.min(taskRows.implicitHeight, Style.space(50) * 5 + Style.space(5) * 4)
-                contentWidth: width
-                contentHeight: taskRows.implicitHeight
+                height: Math.min(root.visibleTasks.length, 5) * Style.space(50)
+                  + Math.max(0, Math.min(root.visibleTasks.length, 5) - 1) * spacing
+                model: root.visibleTasks
+                spacing: Style.space(5)
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                flickableDirection: Flickable.VerticalFlick
-                interactive: contentHeight > height
+                orientation: ListView.Vertical
+                interactive: root.visibleTasks.length > 5
                 QQC.ScrollBar.vertical: QQC.ScrollBar {
                   policy: root.visibleTasks.length > 5 ? QQC.ScrollBar.AlwaysOn : QQC.ScrollBar.AlwaysOff
                 }
 
-                Column {
-                  id: taskRows
-                  width: taskScroll.width
-                  spacing: Style.space(5)
-
-                  Repeater {
-                    model: root.visibleTasks
-                    Rectangle {
+                delegate: Rectangle {
                       required property var modelData
-                      width: taskRows.width
+                      width: taskList.width
                       height: Style.space(50)
                       radius: Style.cornerRadius
                       color: taskMouse.containsMouse
@@ -1958,8 +1952,6 @@ Panel {
                           font.pixelSize: Style.font.caption
                         }
                       }
-                    }
-                  }
                 }
               }
 
