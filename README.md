@@ -20,6 +20,8 @@ verwirft das App-Passwort.
 
 Für weitere Kalender denselben Ablauf wiederholen. Jedes Konto verwaltet eine
 CalDAV-Kalenderadresse. Die Oberfläche prüft die Verbindung vor dem Speichern.
+Über dem Monatsraster wechseln Mausrad und Zwei-Finger-Scrollen auf dem Touchpad
+zwischen den Monaten; die Pfeile unter dem Raster funktionieren ebenfalls.
 
 [Nextcloud-Dokumentation zu App-Passwörtern](https://docs.nextcloud.com/server/stable/user_manual/en/session_management.html)
 

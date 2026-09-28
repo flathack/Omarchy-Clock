@@ -41,6 +41,7 @@ Panel {
   // a read-out, not a picker, so there is no per-day cursor to keep in sync.
   property int viewYear: today.getFullYear()
   property int viewMonth: today.getMonth()
+  property real monthWheelAccumulator: 0
   property string selectedDayKey: todayKey
   property var calendarAccounts: []
   property var calendarEvents: []
@@ -798,11 +799,17 @@ Panel {
             height: gridColumn.y + gridColumn.height
 
             WheelHandler {
+              acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+              blocking: true
               onWheel: function(event) {
-                // Horizontal wheels and touchpad side-scrolls report y === 0;
-                // without this they would every one read as "next month".
-                if (event.angleDelta.y === 0) return
-                root.moveMonth(event.angleDelta.y > 0 ? -1 : 1)
+                // A mouse notch is 120 angle units. Touchpads often send
+                // smaller increments, so wait for a full step before moving.
+                var delta = event.angleDelta.y
+                if (delta === 0 && event.pixelDelta.y !== 0) delta = event.pixelDelta.y * 2
+                if (delta === 0) { event.accepted = false; return }
+                var wheel = Util.wheelSteps(root.monthWheelAccumulator, delta)
+                root.monthWheelAccumulator = wheel.remainder
+                if (wheel.steps !== 0) root.moveMonth(-wheel.steps)
               }
             }
 
