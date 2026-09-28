@@ -1124,7 +1124,7 @@ Panel {
                 anchors.rightMargin: Style.space(7)
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !root.managingAccounts && root.calendarAccounts.length > 0
-                iconText: "󰓦"
+                iconText: root.loadingEvents ? "" : "󰓦"
                 tooltipText: root.loadingEvents ? "Termine werden aktualisiert" : "Termine aktualisieren"
                 foreground: root.contentForeground
                 fontFamily: root.contentFontFamily
@@ -1133,6 +1133,42 @@ Panel {
                 focusable: true
                 enabled: !root.loadingEvents
                 onClicked: root.loadEvents()
+
+                Item {
+                  width: Style.space(14)
+                  height: width
+                  anchors.centerIn: parent
+                  visible: root.loadingEvents
+
+                  Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: "transparent"
+                    border.width: Style.spacing.hairline
+                    border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.3)
+                  }
+
+                  Item {
+                    anchors.fill: parent
+
+                    Rectangle {
+                      width: Style.space(4)
+                      height: width
+                      radius: width / 2
+                      anchors.top: parent.top
+                      anchors.horizontalCenter: parent.horizontalCenter
+                      color: Color.accent
+                    }
+
+                    RotationAnimator on rotation {
+                      from: 0
+                      to: 360
+                      duration: 900
+                      loops: Animation.Infinite
+                      running: root.loadingEvents && root.opened
+                    }
+                  }
+                }
               }
             }
 
@@ -1381,14 +1417,6 @@ Panel {
                 font.pixelSize: Style.font.bodySmall
               }
 
-              Text {
-                visible: root.loadingEvents && root.calendarAccounts.length > 0
-                text: "Termine werden geladen…"
-                color: Qt.darker(root.contentForeground, 1.4)
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-              }
-
               Column {
                 visible: !root.eventFormOpen
                 width: parent.width
@@ -1453,7 +1481,7 @@ Panel {
                 }
 
                 Text {
-                  visible: !root.loadingEvents && root.calendarAccounts.length > 0 && root.selectedDayEvents.length === 0
+                  visible: root.calendarAccounts.length > 0 && root.selectedDayEvents.length === 0
                   text: "Keine Termine an diesem Tag."
                   color: Qt.darker(root.contentForeground, 1.5)
                   font.family: root.contentFontFamily
